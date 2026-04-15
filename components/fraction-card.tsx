@@ -140,8 +140,8 @@ function SlotCell({
   const hasVisual = showVisual && slot.shape !== "none";
   const isZero = slot.numerator === 0;
   const isInteger = slot.isInteger || slot.denominator === 1;
-  const numFontSize = compact ? "text-base" : "text-lg";
-  const intFontSize = compact ? "text-xl" : "text-2xl";
+  const numFontSize = compact ? "text-sm sm:text-base" : "text-sm sm:text-lg";
+  const intFontSize = compact ? "text-base sm:text-xl" : "text-lg sm:text-2xl";
 
   const highlightStyle = isHighlighted
     ? {
@@ -227,7 +227,7 @@ function CardBack({ className }: { className?: string }) {
       }}
       aria-label="Carta virada para baixo"
     >
-      <span className="text-white text-4xl font-black opacity-50 select-none">
+      <span className="text-white text-3xl sm:text-4xl font-black opacity-50 select-none">
         ?
       </span>
     </div>
@@ -243,10 +243,24 @@ interface FractionCardProps {
   faceDown?: boolean;
   /** Slots to highlight (matched slots) */
   highlightedSlots?: number[];
-  /** "hand" = compact stack size, "play" = revealed size, "center" = large center card */
-  variant?: "hand" | "play" | "center";
+  /** "hand" = compact stack size, "play" = revealed size, "center" = large center card, "picker" = medium interactive size */
+  variant?: "hand" | "play" | "center" | "picker";
   className?: string;
   onClick?: () => void;
+  /** Enables per-slot selection when provided */
+  onSlotSelect?: (slotIndex: number) => void;
+  /** Currently selected slot index for per-slot selection mode */
+  selectedSlot?: number | null;
+  /** Force visual representation on all slots (no numeric text fallback) */
+  forceVisualOnly?: boolean;
+}
+
+interface FractionSymbolGridProps {
+  card: GameCard;
+  accentColor: string;
+  selectedSlot?: number | null;
+  onSlotSelect?: (slotIndex: number) => void;
+  className?: string;
 }
 
 function getVisualSlotIndices(cardId: number): Set<number> {
@@ -262,6 +276,46 @@ function getVisualSlotIndices(cardId: number): Set<number> {
   return indices;
 }
 
+export function FractionSymbolGrid({
+  card,
+  accentColor,
+  selectedSlot = null,
+  onSlotSelect,
+  className,
+}: FractionSymbolGridProps) {
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-2 grid-rows-3 gap-2 w-full max-w-44 sm:max-w-48",
+        className,
+      )}
+    >
+      {card.slots.map((slot, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={onSlotSelect ? () => onSlotSelect(i) : undefined}
+          className={cn(
+            "rounded-xl h-20 sm:h-24",
+            onSlotSelect &&
+              "cursor-pointer transition-transform hover:scale-[1.02] active:scale-95",
+          )}
+          aria-label={
+            onSlotSelect ? `Selecionar simbolo ${i + 1}` : `Simbolo ${i + 1}`
+          }
+        >
+          <SlotCell
+            slot={slot}
+            accentColor={accentColor}
+            isHighlighted={selectedSlot === i}
+            showVisual
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function FractionCard({
   card,
   accentColor = "#ef4444",
@@ -270,11 +324,15 @@ export function FractionCard({
   variant = "play",
   className,
   onClick,
+  onSlotSelect,
+  selectedSlot = null,
+  forceVisualOnly = false,
 }: FractionCardProps) {
   const sizeClasses = {
-    hand: "w-20 h-28",
-    play: "w-40 h-64",
-    center: "w-48 h-72",
+    hand: "w-16 h-24 sm:w-20 sm:h-28",
+    play: "w-[min(44vw,10rem)] h-[min(70vw,16rem)] sm:w-40 sm:h-64",
+    center: "w-[min(52vw,12rem)] h-[min(78vw,18rem)] sm:w-48 sm:h-72",
+    picker: "w-28 h-44 sm:w-32 sm:h-48",
   };
 
   if (faceDown) {
@@ -305,7 +363,7 @@ export function FractionCard({
         className="flex items-center justify-center py-0.5"
         style={{ background: accentColor }}
       >
-        <span className="text-white font-black text-xs tracking-wider">
+        <span className="text-white font-black text-[10px] sm:text-xs tracking-wider">
           Carta {card.id}
         </span>
       </div>
@@ -318,14 +376,27 @@ export function FractionCard({
         )}
       >
         {card.slots.map((slot, i) => (
-          <SlotCell
+          <button
             key={i}
-            slot={slot}
-            accentColor={accentColor}
-            isHighlighted={highlightedSlots.includes(i)}
-            showVisual={visualSlotIndices.has(i)}
-            compact={compact}
-          />
+            type="button"
+            onClick={onSlotSelect ? () => onSlotSelect(i) : undefined}
+            className={cn(
+              "h-full w-full rounded-xl",
+              onSlotSelect &&
+                "cursor-pointer transition-transform hover:scale-[1.02] active:scale-95",
+            )}
+            aria-label={
+              onSlotSelect ? `Selecionar fracao ${i + 1}` : `Fracao ${i + 1}`
+            }
+          >
+            <SlotCell
+              slot={slot}
+              accentColor={accentColor}
+              isHighlighted={highlightedSlots.includes(i) || selectedSlot === i}
+              showVisual={forceVisualOnly ? true : visualSlotIndices.has(i)}
+              compact={compact || variant === "picker"}
+            />
+          </button>
         ))}
       </div>
     </div>

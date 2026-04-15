@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { FractionCard } from "@/components/fraction-card";
+import { FractionCard, FractionSymbolGrid } from "@/components/fraction-card";
 import {
   type GameState,
   type Player,
   type GameCard,
-  type FractionSlot,
   findMatches,
   slotLabel,
 } from "@/lib/game";
@@ -43,11 +42,14 @@ function MatchConfirmModal({
   onCancel,
 }: MatchConfirmProps) {
   const [selectedCardSlot, setSelectedCardSlot] = useState<number | null>(null);
+  const [selectedCenterSlot, setSelectedCenterSlot] = useState<number | null>(
+    null,
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
-        className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border-4 flex flex-col gap-4"
+        className="bg-white rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl border-4 flex flex-col gap-4"
         style={{ borderColor: playerColor }}
       >
         <div>
@@ -61,106 +63,78 @@ function MatchConfirmModal({
             className="text-sm font-semibold mt-0.5"
             style={{ color: "var(--muted-foreground)" }}
           >
-            {selectedCardSlot === null
-              ? "Escolhe a fração da tua carta:"
-              : `Escolhe a fração equivalente na carta do centro:`}
+            Seleciona 1 simbolo da tua carta e 1 simbolo da carta do centro.
           </p>
         </div>
 
-        {/* Step 1 — pick a slot from player's card */}
-        {selectedCardSlot === null && (
-          <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div
+            className="rounded-2xl border p-3"
+            style={{
+              borderColor: `${playerColor}66`,
+              background: `${playerColor}0d`,
+            }}
+          >
             <p
-              className="text-xs font-black uppercase tracking-widest"
-              style={{ color: "var(--muted-foreground)" }}
+              className="text-xs font-black uppercase tracking-widest text-center mb-2"
+              style={{ color: playerColor }}
             >
               A tua carta
             </p>
-            {playerCard.slots.map((slot, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedCardSlot(i)}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 font-black text-base transition-all hover:scale-[1.02] active:scale-95 text-left"
-                style={{
-                  borderColor: playerColor,
-                  background: `${playerColor}12`,
-                  color: "var(--foreground)",
-                }}
-              >
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0"
-                  style={{ background: playerColor }}
-                >
-                  {i + 1}
-                </span>
-                <span style={{ color: playerColor }}>{slotLabel(slot)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Step 2 — pick a slot from the center card */}
-        {selectedCardSlot !== null && (
-          <div className="flex flex-col gap-2">
-            <div
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border-2"
-              style={{
-                borderColor: playerColor,
-                background: `${playerColor}12`,
-              }}
-            >
-              <span
-                className="text-xs font-bold"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                Escolheste:
-              </span>
-              <span
-                className="font-black text-base"
-                style={{ color: playerColor }}
-              >
-                {slotLabel(playerCard.slots[selectedCardSlot])}
-              </span>
+            <div className="flex justify-center">
+              <FractionSymbolGrid
+                card={playerCard}
+                accentColor={playerColor}
+                selectedSlot={selectedCardSlot}
+                onSlotSelect={setSelectedCardSlot}
+              />
             </div>
-            <p
-              className="text-xs font-black uppercase tracking-widest"
-              style={{ color: "var(--muted-foreground)" }}
-            >
-              Carta do centro — seleciona a equivalente
-            </p>
-            {centerCard.slots.map((slot, i) => (
-              <button
-                key={i}
-                onClick={() => onAnswer(selectedCardSlot, i)}
-                className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 font-black text-base transition-all hover:scale-[1.02] active:scale-95 text-left"
-                style={{
-                  borderColor: "#22c55e",
-                  background: "#22c55e12",
-                  color: "var(--foreground)",
-                }}
-              >
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0"
-                  style={{ background: "#22c55e" }}
-                >
-                  {i + 1}
-                </span>
-                <span style={{ color: "#16a34a" }}>{slotLabel(slot)}</span>
-              </button>
-            ))}
-            <button
-              onClick={() => setSelectedCardSlot(null)}
-              className="text-xs font-bold underline text-left mt-1"
-              style={{ color: "var(--muted-foreground)" }}
-            >
-              Voltar atras
-            </button>
           </div>
-        )}
+
+          <div
+            className="rounded-2xl border p-3"
+            style={{ borderColor: "#22c55e66", background: "#22c55e0d" }}
+          >
+            <p
+              className="text-xs font-black uppercase tracking-widest text-center mb-2"
+              style={{ color: "#16a34a" }}
+            >
+              Carta do centro
+            </p>
+            <div className="flex justify-center">
+              <FractionSymbolGrid
+                card={centerCard}
+                accentColor="#22c55e"
+                selectedSlot={selectedCenterSlot}
+                onSlotSelect={setSelectedCenterSlot}
+              />
+            </div>
+          </div>
+        </div>
+
+        <p
+          className="text-xs font-bold text-center"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          So podes selecionar 1 de cada carta.
+        </p>
+
+        <button
+          onClick={() => {
+            if (selectedCardSlot === null || selectedCenterSlot === null)
+              return;
+            onAnswer(selectedCardSlot, selectedCenterSlot);
+          }}
+          disabled={selectedCardSlot === null || selectedCenterSlot === null}
+          className="py-2.5 rounded-xl text-white font-black text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: playerColor }}
+        >
+          Confirmar equivalencia
+        </button>
 
         <button
           onClick={onCancel}
-          className="mt-1 py-2.5 rounded-xl border-2 font-black text-sm transition-colors hover:bg-muted"
+          className="py-2.5 rounded-xl border-2 font-black text-sm transition-colors hover:bg-muted"
           style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
         >
           Cancelar
@@ -192,8 +166,8 @@ function PlayerZone({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 p-4 rounded-3xl border-4 transition-all duration-300",
-        isHighlighted ? "shadow-xl scale-105" : "shadow-sm",
+        "flex flex-col items-center gap-3 p-3 sm:p-4 rounded-3xl border-4 transition-all duration-300",
+        isHighlighted ? "shadow-xl md:scale-105" : "shadow-sm",
       )}
       style={{
         borderColor: isHighlighted ? player.color : "var(--border)",
@@ -202,7 +176,7 @@ function PlayerZone({
     >
       {/* Name badge */}
       <div
-        className="px-4 py-1.5 rounded-full text-white text-sm font-black flex items-center gap-2"
+        className="px-4 py-1.5 rounded-full text-white text-xs sm:text-sm font-black flex items-center gap-2"
         style={{ background: player.color }}
       >
         {player.isAI && (
@@ -219,7 +193,7 @@ function PlayerZone({
       </div>
 
       {/* Cards row */}
-      <div className="flex items-end gap-3">
+      <div className="flex items-end justify-center gap-2 sm:gap-3 w-full">
         {/* Current played card (face-up) */}
         {player.currentCard ? (
           <FractionCard
@@ -230,11 +204,11 @@ function PlayerZone({
           />
         ) : (
           <div
-            className="w-40 h-64 rounded-2xl border-4 border-dashed flex items-center justify-center"
+            className="w-[min(44vw,10rem)] h-[min(70vw,16rem)] sm:w-40 sm:h-64 rounded-2xl border-4 border-dashed flex items-center justify-center"
             style={{ borderColor: `${player.color}50` }}
           >
             <span
-              className="text-4xl font-black"
+              className="text-3xl sm:text-4xl font-black"
               style={{ color: `${player.color}50` }}
             >
               ?
@@ -244,7 +218,7 @@ function PlayerZone({
 
         {/* Hand stack */}
         <div className="flex flex-col items-center gap-1.5">
-          <div className="relative w-20 h-28">
+          <div className="relative w-16 h-24 sm:w-20 sm:h-28">
             {player.hand.length > 0 ? (
               player.hand
                 .slice(0, Math.min(3, player.hand.length))
@@ -284,11 +258,11 @@ function PlayerZone({
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
         {canFlip && (
           <button
             onClick={onFlip}
-            className="px-5 py-2 rounded-full text-white font-black text-sm shadow-lg active:scale-95 transition-transform"
+            className="w-full sm:w-auto px-4 sm:px-5 py-2 rounded-full text-white font-black text-xs sm:text-sm shadow-lg active:scale-95 transition-transform"
             style={{ background: player.color }}
           >
             Virar Carta
@@ -297,7 +271,7 @@ function PlayerZone({
         {canClaim && (
           <button
             onClick={onClaim}
-            className="px-5 py-2 rounded-full text-white font-black text-sm shadow-lg active:scale-95 transition-transform animate-bounce"
+            className="w-full sm:w-auto px-4 sm:px-5 py-2 rounded-full text-white font-black text-xs sm:text-sm shadow-lg active:scale-95 transition-transform animate-bounce"
             style={{ background: "#f59e0b" }}
           >
             Tenho equivalencia!
@@ -324,7 +298,27 @@ export function GameBoard({
   const [highlightedSlots, setHighlightedSlots] = useState<
     Record<number, number[]>
   >({});
+  const [roundWinnerPopup, setRoundWinnerPopup] = useState<{
+    name: string;
+    color: string;
+  } | null>(null);
+  const [roundCountdown, setRoundCountdown] = useState<number | null>(null);
   const aiTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const roundWinnerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const roundCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const previousRoundRef = useRef(gameState.round);
+
+  const clearRoundTransitionTimers = useCallback(() => {
+    if (roundWinnerTimerRef.current) {
+      clearTimeout(roundWinnerTimerRef.current);
+      roundWinnerTimerRef.current = null;
+    }
+
+    if (roundCountdownTimerRef.current) {
+      clearInterval(roundCountdownTimerRef.current);
+      roundCountdownTimerRef.current = null;
+    }
+  }, []);
 
   // All players that still have cards or a current card
   const activePlayers = gameState.players.filter(
@@ -332,6 +326,8 @@ export function GameBoard({
   );
 
   const allFlipped = activePlayers.every((p) => p.currentCard !== null);
+  const isRoundTransitioning =
+    roundWinnerPopup !== null || roundCountdown !== null;
 
   // ── Flip a card ──
   const handleFlip = useCallback(
@@ -362,6 +358,7 @@ export function GameBoard({
   // ── AI auto-flip & auto-claim ──
   useEffect(() => {
     if (gameState.phase !== "playing") return;
+    if (isRoundTransitioning) return;
 
     const aiPlayer = gameState.players.find((p) => p.isAI);
     if (!aiPlayer || aiPlayer.currentCard || aiPlayer.hand.length === 0) return;
@@ -406,7 +403,70 @@ export function GameBoard({
       if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState.players.find((p) => p.isAI)?.currentCard, gameState.phase]);
+  }, [
+    gameState.players.find((p) => p.isAI)?.currentCard,
+    gameState.phase,
+    isRoundTransitioning,
+  ]);
+
+  useEffect(() => {
+    if (gameState.phase === "won") {
+      clearRoundTransitionTimers();
+      setRoundWinnerPopup(null);
+      setRoundCountdown(null);
+      previousRoundRef.current = gameState.round;
+      return;
+    }
+
+    const roundIncreased = gameState.round > previousRoundRef.current;
+    const highlightedPlayer =
+      gameState.highlightedPlayerId !== null
+        ? gameState.players.find((p) => p.id === gameState.highlightedPlayerId)
+        : null;
+
+    if (roundIncreased && highlightedPlayer && gameState.phase === "playing") {
+      clearRoundTransitionTimers();
+      setConfirmingPlayerId(null);
+      setRoundCountdown(null);
+      setRoundWinnerPopup({
+        name: highlightedPlayer.name,
+        color: highlightedPlayer.color,
+      });
+
+      roundWinnerTimerRef.current = setTimeout(() => {
+        setRoundWinnerPopup(null);
+        setRoundCountdown(3);
+
+        roundCountdownTimerRef.current = setInterval(() => {
+          setRoundCountdown((prev) => {
+            if (prev === null) return null;
+            if (prev <= 1) {
+              if (roundCountdownTimerRef.current) {
+                clearInterval(roundCountdownTimerRef.current);
+                roundCountdownTimerRef.current = null;
+              }
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }, 3000);
+    }
+
+    previousRoundRef.current = gameState.round;
+  }, [
+    clearRoundTransitionTimers,
+    gameState.highlightedPlayerId,
+    gameState.phase,
+    gameState.players,
+    gameState.round,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearRoundTransitionTimers();
+    };
+  }, [clearRoundTransitionTimers]);
 
   // ── Apply an answer from the player ──
   // Validates the chosen pair. If correct → win the round (card removed, new center).
@@ -461,7 +521,9 @@ export function GameBoard({
           phase: winner ? "won" : "playing",
           winner: winner ?? null,
           round: state.round + 1,
-          message: `Correto! ${matchLabel}. Nova ronda!`,
+          message: winner
+            ? `${player.name} venceu o jogo!`
+            : `${player.name} ganhou a ronda! ${matchLabel}`,
           highlightedPlayerId: playerId,
         });
 
@@ -491,6 +553,7 @@ export function GameBoard({
   );
 
   const handleClaimOpen = (playerId: number) => {
+    if (isRoundTransitioning) return;
     const player = gameState.players[playerId];
     if (!player) return;
     if (
@@ -518,12 +581,161 @@ export function GameBoard({
       ? gameState.players.find((p) => p.id === confirmingPlayerId)
       : null;
 
-  const gridCols =
+  const mobileGridCols =
     gameState.players.length === 4
-      ? "grid-cols-2"
-      : gameState.players.length === 2
-        ? "grid-cols-2"
-        : "grid-cols-1";
+      ? "grid-cols-1 sm:grid-cols-2"
+      : "grid-cols-1";
+
+  const localPlayerInRoom =
+    gameState.mode === "multiplayer" && localPlayerName
+      ? (gameState.players.find((p) => p.name === localPlayerName) ?? null)
+      : null;
+
+  const mobilePlayers = localPlayerInRoom
+    ? [
+        localPlayerInRoom,
+        ...gameState.players.filter((p) => p.id !== localPlayerInRoom.id),
+      ]
+    : gameState.players;
+
+  const seatTop = gameState.players[0] ?? null;
+  const seatRight = gameState.players[1] ?? null;
+  const seatBottom = gameState.players[2] ?? null;
+  const seatLeft = gameState.players[3] ?? null;
+
+  const renderPlayerZone = (player: Player) => {
+    const isLocalPlayer =
+      gameState.mode === "multiplayer"
+        ? player.name === localPlayerName
+        : !player.isAI;
+
+    return (
+      <PlayerZone
+        key={player.id}
+        player={player}
+        isHighlighted={gameState.highlightedPlayerId === player.id}
+        highlightedSlots={highlightedSlots[player.id] ?? []}
+        onFlip={() => handleFlip(player.id)}
+        canFlip={
+          isLocalPlayer &&
+          !isRoundTransitioning &&
+          !player.currentCard &&
+          player.hand.length > 0
+        }
+        onClaim={() => handleClaimOpen(player.id)}
+        canClaim={
+          isLocalPlayer &&
+          !isRoundTransitioning &&
+          !!player.currentCard &&
+          allFlipped &&
+          gameState.phase === "playing"
+        }
+      />
+    );
+  };
+
+  const renderCenterPanel = (className?: string) => (
+    <div
+      className={cn(
+        "rounded-3xl p-3 border-2 flex flex-col items-center gap-3 bg-white shadow-sm",
+        className,
+      )}
+      style={{ borderColor: "var(--border)" }}
+    >
+      <p
+        className="text-xs font-black uppercase tracking-widest"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        Carta do Centro
+      </p>
+
+      {gameState.centerCard && (
+        <FractionCard
+          card={gameState.centerCard}
+          accentColor="#22c55e"
+          variant="center"
+        />
+      )}
+
+      <div
+        className="w-full rounded-2xl p-3 border"
+        style={{ background: "var(--muted)", borderColor: "var(--border)" }}
+      >
+        <p
+          className="text-xs font-black uppercase tracking-widest mb-2 text-center"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          Cartas em mao
+        </p>
+        {gameState.players.map((p) => (
+          <div key={p.id} className="flex items-center justify-between py-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ background: p.color }}
+              />
+              <span
+                className="text-sm font-bold truncate"
+                style={{ color: "var(--foreground)" }}
+              >
+                {p.name}
+              </span>
+            </div>
+            <span className="text-sm font-black" style={{ color: p.color }}>
+              {p.hand.length + (p.currentCard ? 1 : 0)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {gameState.phase === "playing" && !allFlipped && (
+        <div
+          className="w-full rounded-2xl p-3 border text-center"
+          style={{
+            background: "var(--muted)",
+            borderColor: "var(--border)",
+          }}
+        >
+          <p
+            className="text-xs font-bold"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            {activePlayers.filter((p) => p.currentCard).length}/
+            {activePlayers.length} viraram a carta
+          </p>
+          <div
+            className="mt-2 h-2 rounded-full overflow-hidden"
+            style={{ background: "var(--border)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                background: "var(--primary)",
+                width: `${(activePlayers.filter((p) => p.currentCard).length / activePlayers.length) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {allFlipped && gameState.phase === "playing" && (
+        <div
+          className="w-full rounded-2xl p-3 border text-center"
+          style={{ background: "#fef9c3", borderColor: "#fde047" }}
+        >
+          <p className="text-sm font-black" style={{ color: "#713f12" }}>
+            Todos viraram! Quem tem equivalencia?
+          </p>
+          <p
+            className="text-xs font-semibold mt-1"
+            style={{ color: "#92400e" }}
+          >
+            Clica em "Tenho equivalencia!"
+          </p>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -532,7 +744,7 @@ export function GameBoard({
     >
       {/* ── Header ── */}
       <header
-        className="flex items-center justify-between px-4 py-3 border-b-2"
+        className="flex items-start sm:items-center justify-between gap-3 px-3 sm:px-4 py-3 border-b-2"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="flex items-center gap-3">
@@ -574,7 +786,7 @@ export function GameBoard({
           </div>
           <button
             onClick={onRestart}
-            className="px-4 py-2 rounded-full border-2 text-sm font-bold transition-colors hover:bg-muted"
+            className="px-3 sm:px-4 py-2 rounded-full border-2 text-xs sm:text-sm font-bold transition-colors hover:bg-muted"
             style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           >
             Reiniciar
@@ -606,6 +818,54 @@ export function GameBoard({
             onAnswer={handleAnswer}
             onCancel={() => setConfirmingPlayerId(null)}
           />
+        )}
+
+      {/* ── Round transition overlay ── */}
+      {gameState.phase === "playing" &&
+        (roundWinnerPopup || roundCountdown !== null) && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl border-4 border-white">
+              {roundWinnerPopup && (
+                <>
+                  <p
+                    className="text-xs font-black uppercase tracking-widest mb-2"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    Ronda ganha
+                  </p>
+                  <h2
+                    className="text-2xl sm:text-3xl font-black"
+                    style={{ color: roundWinnerPopup.color }}
+                  >
+                    {roundWinnerPopup.name}
+                  </h2>
+                  <p
+                    className="text-sm font-semibold mt-2"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    Preparar proxima ronda...
+                  </p>
+                </>
+              )}
+
+              {roundCountdown !== null && (
+                <>
+                  <p
+                    className="text-xs font-black uppercase tracking-widest mb-2"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    Proxima ronda em
+                  </p>
+                  <div
+                    className="text-6xl sm:text-7xl font-black leading-none"
+                    style={{ color: "var(--primary)" }}
+                  >
+                    {roundCountdown}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
       {/* ── Won overlay ── */}
@@ -645,137 +905,89 @@ export function GameBoard({
       )}
 
       {/* ── Main layout ── */}
-      <main className="flex-1 flex flex-col lg:flex-row items-start gap-6 p-4 md:p-6 max-w-7xl mx-auto w-full">
-        {/* Player zones */}
-        <div className={cn("flex-1 grid gap-4 w-full", gridCols)}>
-          {gameState.players.map((player) => {
-            const isLocalPlayer =
-              gameState.mode === "multiplayer"
-                ? player.name === localPlayerName
-                : !player.isAI;
-
-            return (
-              <PlayerZone
-                key={player.id}
-                player={player}
-                isHighlighted={gameState.highlightedPlayerId === player.id}
-                highlightedSlots={highlightedSlots[player.id] ?? []}
-                onFlip={() => handleFlip(player.id)}
-                canFlip={
-                  isLocalPlayer && !player.currentCard && player.hand.length > 0
-                }
-                onClaim={() => handleClaimOpen(player.id)}
-                canClaim={
-                  isLocalPlayer &&
-                  !!player.currentCard &&
-                  allFlipped &&
-                  gameState.phase === "playing"
-                }
-              />
-            );
-          })}
-        </div>
-
-        {/* Center column */}
-        <div className="flex flex-col items-center gap-3 lg:w-56 w-full">
-          <p
-            className="text-xs font-black uppercase tracking-widest"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            Carta do Centro
-          </p>
-
-          {gameState.centerCard && (
-            <FractionCard
-              card={gameState.centerCard}
-              accentColor="#22c55e"
-              variant="center"
-            />
-          )}
-
-          {/* Score board */}
+      <main className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full">
+        {/* Mobile: center card inline (avoid overlay on player zones while scrolling) */}
+        <div className="lg:hidden flex flex-col gap-4">
           <div
-            className="w-full rounded-2xl p-3 border-2"
-            style={{ background: "var(--card)", borderColor: "var(--border)" }}
+            className="relative z-0 rounded-3xl border-2 p-3 shadow-lg"
+            style={{
+              background: "var(--card)",
+              borderColor: "var(--border)",
+            }}
           >
-            <p
-              className="text-xs font-black uppercase tracking-widest mb-2 text-center"
-              style={{ color: "var(--muted-foreground)" }}
-            >
-              Cartas em mao
-            </p>
-            {gameState.players.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between py-1"
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ background: p.color }}
-                  />
-                  <span
-                    className="text-sm font-bold"
-                    style={{ color: "var(--foreground)" }}
-                  >
-                    {p.name}
-                  </span>
-                </div>
-                <span className="text-sm font-black" style={{ color: p.color }}>
-                  {p.hand.length + (p.currentCard ? 1 : 0)}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Progress indicator */}
-          {gameState.phase === "playing" && !allFlipped && (
-            <div
-              className="w-full rounded-2xl p-3 border-2 text-center"
-              style={{
-                background: "var(--muted)",
-                borderColor: "var(--border)",
-              }}
-            >
+            <div className="flex items-center justify-between gap-2 mb-2">
               <p
+                className="text-xs font-black uppercase tracking-widest"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                Carta do Centro
+              </p>
+              <span
                 className="text-xs font-bold"
                 style={{ color: "var(--muted-foreground)" }}
               >
-                {activePlayers.filter((p) => p.currentCard).length}/
-                {activePlayers.length} viraram a carta
-              </p>
-              <div
-                className="mt-2 h-2 rounded-full overflow-hidden"
-                style={{ background: "var(--border)" }}
-              >
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    background: "var(--primary)",
-                    width: `${(activePlayers.filter((p) => p.currentCard).length / activePlayers.length) * 100}%`,
-                  }}
-                />
-              </div>
+                Ronda {gameState.round}
+              </span>
             </div>
-          )}
 
-          {allFlipped && gameState.phase === "playing" && (
-            <div
-              className="w-full rounded-2xl p-3 border-2 text-center"
-              style={{ background: "#fef9c3", borderColor: "#fde047" }}
-            >
-              <p className="text-sm font-black" style={{ color: "#713f12" }}>
-                Todos viraram! Quem tem equivalencia?
-              </p>
-              <p
-                className="text-xs font-semibold mt-1"
-                style={{ color: "#92400e" }}
-              >
-                Clica em "Tenho equivalencia!"
-              </p>
+            <div className="flex justify-center">
+              {gameState.centerCard && (
+                <FractionCard
+                  card={gameState.centerCard}
+                  accentColor="#22c55e"
+                  variant="center"
+                />
+              )}
             </div>
-          )}
+
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+              {gameState.players.map((p) => (
+                <span
+                  key={p.id}
+                  className="px-2.5 py-1 rounded-full text-xs font-black border"
+                  style={{
+                    color: p.color,
+                    borderColor: `${p.color}66`,
+                    background: `${p.color}14`,
+                  }}
+                >
+                  {p.name}: {p.hand.length + (p.currentCard ? 1 : 0)}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className={cn("grid gap-4 w-full", mobileGridCols)}>
+            {mobilePlayers.map((player) => renderPlayerZone(player))}
+          </div>
         </div>
+
+        {/* Desktop: table positioning (structure-first, neutral visuals) */}
+        {gameState.players.length === 4 ? (
+          <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_18rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] gap-5 items-start">
+            <div className="col-start-2 row-start-1">
+              {seatTop && renderPlayerZone(seatTop)}
+            </div>
+            <div className="col-start-1 row-start-2">
+              {seatLeft && renderPlayerZone(seatLeft)}
+            </div>
+            <div className="col-start-2 row-start-2">
+              {renderCenterPanel("sticky top-4")}
+            </div>
+            <div className="col-start-3 row-start-2">
+              {seatRight && renderPlayerZone(seatRight)}
+            </div>
+            <div className="col-start-2 row-start-3">
+              {seatBottom && renderPlayerZone(seatBottom)}
+            </div>
+          </div>
+        ) : (
+          <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_18rem_minmax(0,1fr)] gap-5 items-start">
+            <div>{seatTop && renderPlayerZone(seatTop)}</div>
+            <div>{renderCenterPanel("sticky top-4")}</div>
+            <div>{seatRight && renderPlayerZone(seatRight)}</div>
+          </div>
+        )}
       </main>
     </div>
   );
