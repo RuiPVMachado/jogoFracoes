@@ -137,9 +137,9 @@ function SlotCell({
 }: SlotCellProps) {
   const filled = slot.numerator;
   const total = slot.denominator;
-  const hasVisual = showVisual && slot.shape !== "none";
   const isZero = slot.numerator === 0;
   const isInteger = slot.isInteger || slot.denominator === 1;
+  const hasVisual = showVisual && slot.shape !== "none" && !isInteger;
   const numFontSize = compact ? "text-sm sm:text-base" : "text-sm sm:text-lg";
   const intFontSize = compact ? "text-base sm:text-xl" : "text-lg sm:text-2xl";
 
@@ -251,7 +251,7 @@ interface FractionCardProps {
   onSlotSelect?: (slotIndex: number) => void;
   /** Currently selected slot index for per-slot selection mode */
   selectedSlot?: number | null;
-  /** Force visual representation on all slots (no numeric text fallback) */
+  /** Force visual representation on non-integer slots (integers stay numeric) */
   forceVisualOnly?: boolean;
 }
 
@@ -263,14 +263,27 @@ interface FractionSymbolGridProps {
   className?: string;
 }
 
-function getVisualSlotIndices(cardId: number): Set<number> {
-  // Deterministic mix per card: 3 to 4 visual-only slots, remaining numeric-only.
-  const visualCount = 3 + (cardId % 2);
-  const start = cardId % 6;
+function getVisualSlotIndices(card: GameCard): Set<number> {
+  // Deterministic mix per card: 2 to 3 visual slots among non-integer fractions.
+  const eligibleIndices = card.slots
+    .map((slot, index) =>
+      slot.shape !== "none" && slot.denominator !== 1 && !slot.isInteger
+        ? index
+        : -1,
+    )
+    .filter((index) => index >= 0);
+
+  if (eligibleIndices.length === 0) {
+    return new Set<number>();
+  }
+
+  const desiredVisualCount = 2 + (card.id % 2); // 2 or 3
+  const visualCount = Math.min(desiredVisualCount, eligibleIndices.length);
+  const start = card.id % eligibleIndices.length;
   const indices = new Set<number>();
 
   for (let i = 0; i < visualCount; i++) {
-    indices.add((start + i) % 6);
+    indices.add(eligibleIndices[(start + i) % eligibleIndices.length]);
   }
 
   return indices;
@@ -283,6 +296,8 @@ export function FractionSymbolGrid({
   onSlotSelect,
   className,
 }: FractionSymbolGridProps) {
+  const visualSlotIndices = getVisualSlotIndices(card);
+
   return (
     <div
       className={cn(
@@ -308,7 +323,7 @@ export function FractionSymbolGrid({
             slot={slot}
             accentColor={accentColor}
             isHighlighted={selectedSlot === i}
-            showVisual
+            showVisual={visualSlotIndices.has(i)}
           />
         </button>
       ))}
@@ -342,7 +357,7 @@ export function FractionCard({
   const compact = variant === "hand";
   const borderColor = accentColor;
   const isCenter = variant === "center";
-  const visualSlotIndices = getVisualSlotIndices(card.id);
+  const visualSlotIndices = getVisualSlotIndices(card);
 
   return (
     <div
@@ -393,7 +408,11 @@ export function FractionCard({
               slot={slot}
               accentColor={accentColor}
               isHighlighted={highlightedSlots.includes(i) || selectedSlot === i}
-              showVisual={forceVisualOnly ? true : visualSlotIndices.has(i)}
+              showVisual={
+                forceVisualOnly
+                  ? slot.denominator !== 1 && !slot.isInteger
+                  : visualSlotIndices.has(i)
+              }
               compact={compact || variant === "picker"}
             />
           </button>
