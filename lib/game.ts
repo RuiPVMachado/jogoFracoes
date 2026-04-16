@@ -1,6 +1,6 @@
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type GameMode = "ai" | "multiplayer";
+// GameMode removed since it's always multiplayer
 
 /** A single fraction slot on a card — value as num/den, plus optional display shape */
 export interface FractionSlot {
@@ -22,7 +22,6 @@ export interface Player {
   id: number;
   name: string;
   color: string;
-  isAI: boolean;
   hand: GameCard[]; // cards in hand (face-down stack)
   currentCard: GameCard | null; // card currently played face-up
 }
@@ -30,11 +29,12 @@ export interface Player {
 export type GamePhase = "setup" | "playing" | "reviewing" | "won";
 
 export interface GameState {
-  mode: GameMode;
   players: Player[];
   centerCard: GameCard | null;
   /** The specific slot on the center card that was "matched" (set after a valid match) */
   centerMatchSlot: FractionSlot | null;
+  /** The specific fraction slots that were matched in the last winning play */
+  lastMatchSlots?: { playerSlot: FractionSlot; centerSlot: FractionSlot };
   phase: GamePhase;
   winner: Player | null;
   round: number;
@@ -161,18 +161,12 @@ export const PLAYER_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#f59e0b"];
 // ── Game initialisation ───────────────────────────────────────────────────
 
 export function initGame(
-  mode: GameMode,
-  playerNames: string[], // human player names (1 for AI mode, 2 or 4 for MP)
+  playerNames: string[], // human player names (2 to 4)
   roomCode?: string
 ): GameState {
   const shuffled = shuffle([...DECK]);
 
-  // In AI mode we always have exactly 2 players: human + AI
-  // In MP mode 2 or 4 players, all human
-  const allNames: string[] = mode === "ai" ? [playerNames[0], "Computador"] : playerNames;
-  const isAI: boolean[] = mode === "ai" ? [false, true] : allNames.map(() => false);
-
-  const playerCount = allNames.length;
+  const playerCount = playerNames.length;
   // First card → center
   const centerCard = shuffled[0];
   const rest = shuffled.slice(1);
@@ -183,17 +177,15 @@ export function initGame(
     hands[i % playerCount].push(card);
   });
 
-  const players: Player[] = allNames.map((name, i) => ({
+  const players: Player[] = playerNames.map((name, i) => ({
     id: i,
     name,
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-    isAI: isAI[i],
     hand: hands[i],
     currentCard: null,
   }));
 
   return {
-    mode,
     players,
     centerCard,
     centerMatchSlot: null,

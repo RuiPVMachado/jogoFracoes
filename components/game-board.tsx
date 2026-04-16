@@ -1,20 +1,22 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { FractionCard, FractionSymbolGrid } from "@/components/fraction-card";
+import { toast } from "sonner";
+import { FractionCard, FractionSymbolGrid, SlotCell } from "@/components/fraction-card";
 import {
   type GameState,
   type Player,
   type GameCard,
+  type FractionSlot,
   findMatches,
+  slotsEquivalent,
   slotLabel,
 } from "@/lib/game";
-import { type AIDifficulty, getAIAction } from "@/lib/ai";
 import { cn } from "@/lib/utils";
+
 
 interface GameBoardProps {
   gameState: GameState;
-  aiDifficulty?: AIDifficulty;
   onGameStateChange: (state: GameState) => void;
   localPlayerName?: string;
   onRestart: () => void;
@@ -154,6 +156,7 @@ function PlayerZone({
   canFlip,
   onClaim,
   canClaim,
+  isBouncing,
 }: {
   player: Player;
   isHighlighted: boolean;
@@ -162,7 +165,9 @@ function PlayerZone({
   canFlip: boolean;
   onClaim: () => void;
   canClaim: boolean;
+  isBouncing: boolean;
 }) {
+
   return (
     <div
       className={cn(
@@ -179,16 +184,6 @@ function PlayerZone({
         className="px-4 py-1.5 rounded-full text-white text-xs sm:text-sm font-black flex items-center gap-2"
         style={{ background: player.color }}
       >
-        {player.isAI && (
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M13 7H7v6h6V7z" />
-            <path
-              fillRule="evenodd"
-              d="M10 2a8 8 0 100 16A8 8 0 0010 2zM2 10a8 8 0 1116 0A8 8 0 012 10z"
-              clipRule="evenodd"
-            />
-          </svg>
-        )}
         {player.name}
       </div>
 
@@ -271,12 +266,16 @@ function PlayerZone({
         {canClaim && (
           <button
             onClick={onClaim}
-            className="w-full sm:w-auto px-4 sm:px-5 py-2 rounded-full text-white font-black text-xs sm:text-sm shadow-lg active:scale-95 transition-transform animate-bounce"
+            className={cn(
+              "w-full sm:w-auto px-4 sm:px-5 py-2 rounded-full text-white font-black text-xs sm:text-sm shadow-lg active:scale-95 transition-transform",
+              isBouncing && "animate-bounce",
+            )}
             style={{ background: "#f59e0b" }}
           >
             Tenho equivalencia!
           </button>
         )}
+
       </div>
     </div>
   );
@@ -286,7 +285,6 @@ function PlayerZone({
 
 export function GameBoard({
   gameState,
-  aiDifficulty = "medio",
   onGameStateChange,
   localPlayerName,
   onRestart,
@@ -294,16 +292,29 @@ export function GameBoard({
   const [confirmingPlayerId, setConfirmingPlayerId] = useState<number | null>(
     null,
   );
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   // Track highlighted card slots per player (for showing which slots matched)
   const [highlightedSlots, setHighlightedSlots] = useState<
     Record<number, number[]>
   >({});
+  // Short-lived bounce on the "Tenho equivalência!" button (cleared after 2s)
+  const [bouncingClaimIds, setBouncingClaimIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const bounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [roundWinnerPopup, setRoundWinnerPopup] = useState<{
     name: string;
     color: string;
+    matchedSlots?: { playerSlot: FractionSlot; centerSlot: FractionSlot };
   } | null>(null);
   const [roundCountdown, setRoundCountdown] = useState<number | null>(null);
-  const aiTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [roundErrorPopup, setRoundErrorPopup] = useState<{
+    name: string;
+  } | null>(null);
+  const errorTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const previousMessageRef = useRef(gameState.message);
   const roundWinnerTimerRef = useRef<NodeJS.Timeout | null>(null);
   const roundCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
   const previousRoundRef = useRef(gameState.round);
@@ -318,6 +329,12 @@ export function GameBoard({
       clearInterval(roundCountdownTimerRef.current);
       roundCountdownTimerRef.current = null;
     }
+    
+    if (errorTimerRef.current) {
+      clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = null;
+    }
+    setRoundErrorPopup(null);
   }, []);
 
   // All players that still have cards or a current card
@@ -327,15 +344,54 @@ export function GameBoard({
 
   const allFlipped = activePlayers.every((p) => p.currentCard !== null);
   const isRoundTransitioning =
-    roundWinnerPopup !== null || roundCountdown !== null;
+    roundWinnerPopup !== null || roundCountdown !== null || roundErrorPopup !== null;
+
+  // Trigger a short bounce animation on claim buttons when allFlipped becomes true
+  useEffect(() => {
+    if (allFlipped && gameState.phase === "playing") {
+      const ids = new Set(activePlayers.map((p) => p.id));
+      setBouncingClaimIds(ids);
+      if (bounceTimerRef.current) clearTimeout(bounceTimerRef.current);
+      bounceTimerRef.current = setTimeout(() => {
+        setBouncingClaimIds(new Set());
+      }, 2000);
+    } else {
+      setBouncingClaimIds(new Set());
+    }
+    return () => {
+      if (bounceTimerRef.current) clearTimeout(bounceTimerRef.current);
+    };
+    // Only re-run when allFlipped or phase changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFlipped, gameState.phase]);
+
+  useEffect(() => {
+    if (gameState.message !== previousMessageRef.current) {
+      previousMessageRef.current = gameState.message;
+      if (gameState.message.includes(" errou! Ronda reiniciada")) {
+        const name = gameState.message.split(" errou!")[0];
+        setRoundErrorPopup({ name });
+        if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = setTimeout(() => {
+          setRoundErrorPopup(null);
+        }, 3000);
+      }
+    }
+  }, [gameState.message]);
+
+  useEffect(() => {
+    return () => {
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    };
+  }, []);
+
 
   // ── Flip a card ──
   const handleFlip = useCallback(
     (playerId: number) => {
-      const player = gameState.players[playerId];
+      const player = gameState.players.find((p) => p.id === playerId);
       if (!player || player.hand.length === 0 || player.currentCard) return;
       if (
-        gameState.mode === "multiplayer" &&
         localPlayerName &&
         player.name !== localPlayerName
       )
@@ -355,59 +411,6 @@ export function GameBoard({
     [gameState, onGameStateChange, localPlayerName],
   );
 
-  // ── AI auto-flip & auto-claim ──
-  useEffect(() => {
-    if (gameState.phase !== "playing") return;
-    if (isRoundTransitioning) return;
-
-    const aiPlayer = gameState.players.find((p) => p.isAI);
-    if (!aiPlayer || aiPlayer.currentCard || aiPlayer.hand.length === 0) return;
-
-    // Clear any pending timer
-    if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
-
-    const { delay } = getAIAction(aiDifficulty);
-    aiTimerRef.current = setTimeout(() => {
-      // Flip AI card
-      const [newCard, ...newHand] = aiPlayer.hand;
-      const stateAfterFlip: GameState = {
-        ...gameState,
-        players: gameState.players.map((p) =>
-          p.isAI ? { ...p, currentCard: newCard, hand: newHand } : p,
-        ),
-        message: `${aiPlayer.name} virou a carta!`,
-      };
-      onGameStateChange(stateAfterFlip);
-
-      // AI claims after a short additional delay if it has a match
-      if (gameState.centerCard) {
-        const matches = findMatches(newCard, gameState.centerCard);
-        const { delay: claimDelay, willMatch } = getAIAction(aiDifficulty);
-        if (willMatch && matches.length > 0) {
-          aiTimerRef.current = setTimeout(
-            () => {
-              applyClaimInternal(
-                stateAfterFlip,
-                aiPlayer.id,
-                matches[0].cardSlotIdx,
-                matches[0].centerSlotIdx,
-              );
-            },
-            Math.round(claimDelay * 0.4),
-          );
-        }
-      }
-    }, delay);
-
-    return () => {
-      if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    gameState.players.find((p) => p.isAI)?.currentCard,
-    gameState.phase,
-    isRoundTransitioning,
-  ]);
 
   useEffect(() => {
     if (gameState.phase === "won") {
@@ -431,6 +434,7 @@ export function GameBoard({
       setRoundWinnerPopup({
         name: highlightedPlayer.name,
         color: highlightedPlayer.color,
+        matchedSlots: gameState.lastMatchSlots,
       });
 
       roundWinnerTimerRef.current = setTimeout(() => {
@@ -484,11 +488,8 @@ export function GameBoard({
 
       const chosenCardSlot = player.currentCard.slots[cardSlotIdx];
       const chosenCenterSlot = state.centerCard.slots[centerSlotIdx];
-      const isCorrect =
-        Math.abs(
-          chosenCardSlot.numerator / chosenCardSlot.denominator -
-            chosenCenterSlot.numerator / chosenCenterSlot.denominator,
-        ) < 0.00001;
+      const isCorrect = slotsEquivalent(chosenCardSlot, chosenCenterSlot);
+
 
       if (isCorrect) {
         // Correct — winning card becomes the new center
@@ -507,9 +508,16 @@ export function GameBoard({
           return p;
         });
 
-        const winner = updatedPlayers.find(
-          (p) => p.hand.length === 0 && p.currentCard === null,
-        );
+        // Only the claiming player can win this round: they just discarded their
+        // currentCard (by making it the new center). If their hand is also empty
+        // they have no cards left → they win. We check by id so we never
+        // accidentally assign victory to another player who happens to be at 0.
+        const claimingPlayer = updatedPlayers.find((p) => p.id === playerId);
+        const winner =
+          claimingPlayer?.hand.length === 0 &&
+          claimingPlayer?.currentCard === null
+            ? claimingPlayer
+            : null;
 
         setHighlightedSlots({ [playerId]: [cardSlotIdx] });
 
@@ -518,6 +526,7 @@ export function GameBoard({
           players: updatedPlayers,
           centerCard: newCenter,
           centerMatchSlot: chosenCenterSlot,
+          lastMatchSlots: { playerSlot: chosenCardSlot, centerSlot: chosenCenterSlot },
           phase: winner ? "won" : "playing",
           winner: winner ?? null,
           round: state.round + 1,
@@ -557,7 +566,6 @@ export function GameBoard({
     const player = gameState.players[playerId];
     if (!player) return;
     if (
-      gameState.mode === "multiplayer" &&
       localPlayerName &&
       player.name !== localPlayerName
     )
@@ -584,30 +592,49 @@ export function GameBoard({
   const mobileGridCols =
     gameState.players.length === 4
       ? "grid-cols-1 sm:grid-cols-2"
-      : "grid-cols-1";
+      : gameState.players.length === 3
+        ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+        : "grid-cols-1 sm:grid-cols-2";
 
   const localPlayerInRoom =
-    gameState.mode === "multiplayer" && localPlayerName
+    localPlayerName
       ? (gameState.players.find((p) => p.name === localPlayerName) ?? null)
       : null;
 
-  const mobilePlayers = localPlayerInRoom
-    ? [
-        localPlayerInRoom,
-        ...gameState.players.filter((p) => p.id !== localPlayerInRoom.id),
-      ]
-    : gameState.players;
+  let rotatedPlayers = [...gameState.players];
+  if (localPlayerInRoom) {
+    const localIdx = rotatedPlayers.findIndex((p) => p.id === localPlayerInRoom.id);
+    if (localIdx !== -1) {
+      rotatedPlayers = [
+        ...rotatedPlayers.slice(localIdx),
+        ...rotatedPlayers.slice(0, localIdx),
+      ];
+    }
+  }
 
-  const seatTop = gameState.players[0] ?? null;
-  const seatRight = gameState.players[1] ?? null;
-  const seatBottom = gameState.players[2] ?? null;
-  const seatLeft = gameState.players[3] ?? null;
+  const mobilePlayers = rotatedPlayers;
+
+  let deskTop = null;
+  let deskLeft = null;
+  let deskRight = null;
+  let deskBottom = null;
+
+  if (rotatedPlayers.length === 2) {
+    deskLeft = rotatedPlayers[0] ?? null;
+    deskRight = rotatedPlayers[1] ?? null;
+  } else if (rotatedPlayers.length === 3) {
+    deskTop = rotatedPlayers[0] ?? null;
+    deskLeft = rotatedPlayers[1] ?? null;
+    deskRight = rotatedPlayers[2] ?? null;
+  } else if (rotatedPlayers.length === 4) {
+    deskTop = rotatedPlayers[0] ?? null;
+    deskLeft = rotatedPlayers[1] ?? null;
+    deskBottom = rotatedPlayers[2] ?? null;
+    deskRight = rotatedPlayers[3] ?? null;
+  }
 
   const renderPlayerZone = (player: Player) => {
-    const isLocalPlayer =
-      gameState.mode === "multiplayer"
-        ? player.name === localPlayerName
-        : !player.isAI;
+    const isLocalPlayer = player.name === localPlayerName;
 
     return (
       <PlayerZone
@@ -630,9 +657,11 @@ export function GameBoard({
           allFlipped &&
           gameState.phase === "playing"
         }
+        isBouncing={bouncingClaimIds.has(player.id)}
       />
     );
   };
+
 
   const renderCenterPanel = (className?: string) => (
     <div
@@ -785,11 +814,11 @@ export function GameBoard({
             </p>
           </div>
           <button
-            onClick={onRestart}
+            onClick={() => setShowExitConfirm(true)}
             className="px-3 sm:px-4 py-2 rounded-full border-2 text-xs sm:text-sm font-bold transition-colors hover:bg-muted"
             style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
           >
-            Reiniciar
+            Sair
           </button>
         </div>
       </header>
@@ -807,6 +836,39 @@ export function GameBoard({
         </p>
       </div>
 
+      {/* ── Custom Exit Confirmation Modal ── */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className="bg-white rounded-3xl p-6 max-w-[320px] w-full text-center shadow-2xl border-4"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <h2 className="text-xl sm:text-2xl font-black mb-2" style={{ color: "var(--foreground)" }}>
+              Sair do jogo
+            </h2>
+            <p className="font-semibold text-sm sm:text-base mb-6" style={{ color: "var(--muted-foreground)" }}>
+              Tem a certeza que deseja sair?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-2.5 sm:py-3 rounded-xl border-2 font-black transition-colors hover:bg-muted"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={onRestart}
+                className="flex-1 py-2.5 sm:py-3 rounded-xl text-white font-black hover:opacity-90 transition-opacity"
+                style={{ background: "#ef4444" }}
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Match confirmation modal ── */}
       {confirmingPlayerId !== null &&
         confirmingPlayer?.currentCard &&
@@ -819,6 +881,23 @@ export function GameBoard({
             onCancel={() => setConfirmingPlayerId(null)}
           />
         )}
+
+      {/* ── Error overlay ── */}
+      {gameState.phase === "playing" && roundErrorPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 transition-all duration-300">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl border-4" style={{ borderColor: "#ef4444" }}>
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "#fef2f2" }}>
+              <span className="text-4xl font-black" style={{ color: "#ef4444" }}>X</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black mb-2" style={{ color: "#ef4444" }}>
+              {roundErrorPopup.name} Errou!
+            </h2>
+            <p className="text-sm font-bold mt-2" style={{ color: "var(--muted-foreground)" }}>
+              Ronda reiniciada. Todos devem virar as cartas novamente.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Round transition overlay ── */}
       {gameState.phase === "playing" &&
@@ -839,6 +918,41 @@ export function GameBoard({
                   >
                     {roundWinnerPopup.name}
                   </h2>
+                  {roundWinnerPopup.matchedSlots && (
+                    <div className="mt-4 mb-2 flex items-center justify-center gap-4 sm:gap-6 w-full px-2">
+                      <div className="flex flex-col items-center flex-1 max-w-[120px]">
+                        <div className="w-24 h-24 sm:w-28 sm:h-28">
+                          <SlotCell
+                            slot={roundWinnerPopup.matchedSlots.playerSlot}
+                            accentColor={roundWinnerPopup.color}
+                            showVisual={true}
+                          />
+                        </div>
+                        {roundWinnerPopup.matchedSlots.playerSlot.shape !== "none" &&
+                         !roundWinnerPopup.matchedSlots.playerSlot.isInteger && (
+                          <div className="mt-3 text-lg sm:text-xl font-black bg-black/5 px-4 py-1.5 rounded-full shadow-sm" style={{ color: roundWinnerPopup.color }}>
+                            {slotLabel(roundWinnerPopup.matchedSlots.playerSlot)}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-4xl sm:text-5xl font-black text-gray-300">=</span>
+                      <div className="flex flex-col items-center flex-1 max-w-[120px]">
+                        <div className="w-24 h-24 sm:w-28 sm:h-28">
+                          <SlotCell
+                            slot={roundWinnerPopup.matchedSlots.centerSlot}
+                            accentColor="#22c55e"
+                            showVisual={true}
+                          />
+                        </div>
+                        {roundWinnerPopup.matchedSlots.centerSlot.shape !== "none" &&
+                         !roundWinnerPopup.matchedSlots.centerSlot.isInteger && (
+                          <div className="mt-3 text-lg sm:text-xl font-black bg-black/5 px-4 py-1.5 rounded-full shadow-sm text-green-500">
+                            {slotLabel(roundWinnerPopup.matchedSlots.centerSlot)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <p
                     className="text-sm font-semibold mt-2"
                     style={{ color: "var(--muted-foreground)" }}
@@ -966,26 +1080,41 @@ export function GameBoard({
         {gameState.players.length === 4 ? (
           <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_18rem_minmax(0,1fr)] grid-rows-[auto_auto_auto] gap-5 items-start">
             <div className="col-start-2 row-start-1">
-              {seatTop && renderPlayerZone(seatTop)}
+              {deskTop && renderPlayerZone(deskTop)}
             </div>
-            <div className="col-start-1 row-start-2">
-              {seatLeft && renderPlayerZone(seatLeft)}
+            <div className="col-start-1 row-start-2 flex justify-end">
+              {deskLeft && renderPlayerZone(deskLeft)}
             </div>
             <div className="col-start-2 row-start-2">
               {renderCenterPanel("sticky top-4")}
             </div>
-            <div className="col-start-3 row-start-2">
-              {seatRight && renderPlayerZone(seatRight)}
+            <div className="col-start-3 row-start-2 flex justify-start">
+              {deskRight && renderPlayerZone(deskRight)}
             </div>
             <div className="col-start-2 row-start-3">
-              {seatBottom && renderPlayerZone(seatBottom)}
+              {deskBottom && renderPlayerZone(deskBottom)}
+            </div>
+          </div>
+        ) : gameState.players.length === 3 ? (
+          <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_18rem_minmax(0,1fr)] grid-rows-[auto_auto] gap-5 items-start">
+            <div className="col-start-2 row-start-1">
+              {deskTop && renderPlayerZone(deskTop)}
+            </div>
+            <div className="col-start-1 row-start-2 flex justify-end">
+              {deskLeft && renderPlayerZone(deskLeft)}
+            </div>
+            <div className="col-start-2 row-start-2">
+              {renderCenterPanel("sticky top-4")}
+            </div>
+            <div className="col-start-3 row-start-2 flex justify-start">
+              {deskRight && renderPlayerZone(deskRight)}
             </div>
           </div>
         ) : (
           <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_18rem_minmax(0,1fr)] gap-5 items-start">
-            <div>{seatTop && renderPlayerZone(seatTop)}</div>
-            <div>{renderCenterPanel("sticky top-4")}</div>
-            <div>{seatRight && renderPlayerZone(seatRight)}</div>
+            <div className="col-start-1 flex justify-end">{deskLeft && renderPlayerZone(deskLeft)}</div>
+            <div className="col-start-2">{renderCenterPanel("sticky top-4")}</div>
+            <div className="col-start-3 flex justify-start">{deskRight && renderPlayerZone(deskRight)}</div>
           </div>
         )}
       </main>

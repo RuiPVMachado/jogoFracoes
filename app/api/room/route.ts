@@ -6,19 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import { initGame, type GameState } from "@/lib/game";
+import { type Room, type RoomStatus } from "@/lib/room";
 
-export type RoomStatus = "waiting" | "playing";
-
-export interface Room {
-  code: string;
-  hostName: string;
-  playerNames: string[];
-  maxPlayers: 2 | 4;
-  status: RoomStatus;
-  createdAt: number;
-  gameState: GameState | null;
-  gameVersion: number;
-}
 
 interface RoomClosedNotice {
   closedBy: string;
@@ -136,7 +125,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const { hostName, maxPlayers } = await req.json();
-    if (!hostName || ![2, 4].includes(maxPlayers)) {
+    if (!hostName || ![2, 3, 4].includes(maxPlayers)) {
       return NextResponse.json({ error: "Dados inválidos." }, { status: 400 });
     }
 
@@ -242,7 +231,7 @@ export async function PATCH(req: NextRequest) {
       }
 
       if (!room.gameState) {
-        room.gameState = initGame("multiplayer", room.playerNames, room.code);
+        room.gameState = initGame(room.playerNames, room.code);
         room.gameVersion = 1;
       }
 
@@ -284,7 +273,7 @@ export async function PATCH(req: NextRequest) {
       }
 
       const nextState = state as GameState;
-      if (!nextState || nextState.mode !== "multiplayer") {
+      if (!nextState) {
         return NextResponse.json(
           { error: "Estado de jogo inválido." },
           { status: 400 },

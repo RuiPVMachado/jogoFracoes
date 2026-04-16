@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { PLAYER_COLORS, type GameState } from "@/lib/game";
-import { type AIDifficulty } from "@/lib/ai";
 import {
   createRoom,
   joinRoom,
@@ -11,8 +11,8 @@ import {
   type Room,
 } from "@/lib/room";
 
+
 interface SetupScreenProps {
-  onStartAI: (playerName: string, difficulty: AIDifficulty) => void;
   onStartMultiplayer: (
     initialState: GameState,
     localPlayerName: string,
@@ -22,46 +22,19 @@ interface SetupScreenProps {
 
 type SetupStep =
   | "mode"
-  | "ai-config"
   | "mp-choice"
   | "mp-create"
   | "mp-join"
   | "mp-lobby";
 
-const DIFFICULTY_LABELS: Record<
-  AIDifficulty,
-  { label: string; desc: string; color: string }
-> = {
-  facil: {
-    label: "Fácil",
-    desc: "Reage devagar, erra algumas vezes",
-    color: "#22c55e",
-  },
-  medio: {
-    label: "Médio",
-    desc: "Reage a velocidade média, quase sempre acerta",
-    color: "#f59e0b",
-  },
-  dificil: {
-    label: "Difícil",
-    desc: "Reage muito rápido e não erra",
-    color: "#ef4444",
-  },
-};
-
 export function SetupScreen({
-  onStartAI,
   onStartMultiplayer,
 }: SetupScreenProps) {
   const [step, setStep] = useState<SetupStep>("mode");
 
-  // AI
-  const [aiDifficulty, setAIDifficulty] = useState<AIDifficulty>("medio");
-  const [aiName, setAIName] = useState("");
-
   // Create room
   const [hostName, setHostName] = useState("");
-  const [mpPlayerCount, setMpPlayerCount] = useState<2 | 4>(2);
+  const [mpPlayerCount, setMpPlayerCount] = useState<2 | 3 | 4>(2);
 
   // Join room
   const [joinCode, setJoinCode] = useState("");
@@ -88,18 +61,17 @@ export function SetupScreen({
       if (lookup.status === "unavailable") return;
 
       if (lookup.status === "closed") {
-        alert(
-          `O jogador ${lookup.closedBy} saiu da partida e a sala foi encerrada.`,
-        );
+        toast(`O jogador ${lookup.closedBy} saiu da partida e a sala foi encerrada.`);
         setStep("mp-choice");
         return;
       }
 
       if (lookup.status === "not-found") {
-        alert("A sala foi fechada.");
+        toast("A sala foi fechada.");
         setStep("mp-choice");
         return;
       }
+
 
       const fresh = lookup.room;
       setLobbyRoom(fresh);
@@ -132,9 +104,10 @@ export function SetupScreen({
 
     const isFull = lobbyRoom.playerNames.length >= lobbyRoom.maxPlayers;
     if (!isFull) {
-      alert("A sala ainda não está completa.");
+      toast.error("A sala ainda não está completa.");
       return;
     }
+
 
     startedRef.current = true;
     setActionLoading(true);
@@ -146,9 +119,10 @@ export function SetupScreen({
 
     if ("error" in result) {
       startedRef.current = false;
-      alert(result.error);
+      toast.error(result.error);
       return;
     }
+
 
     if (pollRef.current) clearInterval(pollRef.current);
     onStartMultiplayer(
@@ -158,10 +132,6 @@ export function SetupScreen({
     );
   }
 
-  function handleStartAI() {
-    const name = aiName.trim() || "Jogador";
-    onStartAI(name, aiDifficulty);
-  }
 
   async function handleCreateRoom() {
     const name = hostName.trim() || "Anfitrião";
@@ -169,9 +139,10 @@ export function SetupScreen({
     const result = await createRoom(name, mpPlayerCount);
     setActionLoading(false);
     if ("error" in result) {
-      alert(result.error);
+      toast.error(result.error);
       return;
     }
+
     setLocalPlayerName(name);
     setLobbyRoom(result.room);
     setIsHost(true);
@@ -199,6 +170,7 @@ export function SetupScreen({
       setJoinError(result.error);
       return;
     }
+
     setLocalPlayerName(name);
     setLobbyRoom(result.room);
     setIsHost(false);
@@ -235,119 +207,41 @@ export function SetupScreen({
           </p>
         </div>
 
-        {/* ── Mode selection ── */}
+        {/* ── Mode selection (Root) ── */}
         {step === "mode" && (
           <div className="flex flex-col gap-4">
             <ModeCard
-              title="Jogador vs Computador"
-              description="Joga sozinho contra a inteligência artificial. Escolhes a dificuldade."
-              symbol="&#9881;"
-              color="#3b82f6"
-              onClick={() => setStep("ai-config")}
-            />
-            <ModeCard
               title="Multijogador Online"
               description="Cria uma sala ou entra com um código para jogar com amigos à distância."
-              symbol="&#9678;"
+              symbol="◎"
               color="#22c55e"
               onClick={() => setStep("mp-choice")}
             />
+
             <RulesCard />
           </div>
-        )}
-
-        {/* ── AI config ── */}
-        {step === "ai-config" && (
-          <Card>
-            <BackButton onClick={() => setStep("mode")} />
-            <h2
-              className="text-xl font-black"
-              style={{ color: "var(--foreground)" }}
-            >
-              Jogador vs Computador
-            </h2>
-
-            <Field label="O teu nome">
-              <input
-                type="text"
-                value={aiName}
-                onChange={(e) => setAIName(e.target.value)}
-                placeholder="Escreve o teu nome"
-                maxLength={20}
-                className="w-full px-4 py-2.5 rounded-xl border-2 font-semibold focus:outline-none"
-                style={{
-                  borderColor: "var(--border)",
-                  color: "var(--foreground)",
-                }}
-              />
-            </Field>
-
-            <Field label="Dificuldade do computador">
-              <div className="flex flex-col gap-2">
-                {(["facil", "medio", "dificil"] as AIDifficulty[]).map((d) => {
-                  const info = DIFFICULTY_LABELS[d];
-                  const active = aiDifficulty === d;
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => setAIDifficulty(d)}
-                      className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all"
-                      style={{
-                        borderColor: active ? info.color : "var(--border)",
-                        background: active ? `${info.color}18` : "transparent",
-                      }}
-                    >
-                      <div
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ background: info.color }}
-                      />
-                      <div>
-                        <p
-                          className="font-black text-sm"
-                          style={{ color: "var(--foreground)" }}
-                        >
-                          {info.label}
-                        </p>
-                        <p
-                          className="text-xs font-semibold"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {info.desc}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
-
-            <PrimaryButton
-              onClick={handleStartAI}
-              color="var(--game-blue, #3b82f6)"
-            >
-              Jogar
-            </PrimaryButton>
-          </Card>
         )}
 
         {/* ── MP choice: create or join ── */}
         {step === "mp-choice" && (
           <div className="flex flex-col gap-4">
             <BackButton onClick={() => setStep("mode")} />
+
             <ModeCard
               title="Criar Sala"
               description="Crias a sala e partilhas o código com os outros jogadores."
-              symbol="&#43;"
+              symbol="+"
               color="#22c55e"
               onClick={() => setStep("mp-create")}
             />
             <ModeCard
               title="Entrar numa Sala"
               description="Tens o código de uma sala? Entra aqui."
-              symbol="&#9654;"
+              symbol="▶"
               color="#f59e0b"
               onClick={() => setStep("mp-join")}
             />
+
           </div>
         )}
 
@@ -379,7 +273,7 @@ export function SetupScreen({
 
             <Field label="Número de jogadores">
               <div className="flex gap-3">
-                {([2, 4] as const).map((n) => (
+                {([2, 3, 4] as const).map((n) => (
                   <button
                     key={n}
                     onClick={() => setMpPlayerCount(n)}
@@ -477,10 +371,10 @@ export function SetupScreen({
         {step === "mp-lobby" && lobbyRoom && (
           <Card>
             <div className="flex flex-col items-center gap-5 text-center">
-              {(() => {
+              {/* Resolve isRoomFull once, outside any IIFE */}
+              {(function LobbyContent() {
                 const isRoomFull =
                   lobbyRoom.playerNames.length >= lobbyRoom.maxPlayers;
-
                 return (
                   <>
                     <h2
@@ -621,6 +515,7 @@ export function SetupScreen({
             </div>
           </Card>
         )}
+
       </div>
     </div>
   );
@@ -678,8 +573,9 @@ function ModeCard({
       <div
         className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl font-black"
         style={{ background: `${color}20`, color }}
-        dangerouslySetInnerHTML={{ __html: symbol }}
-      />
+      >
+        {symbol}
+      </div>
       <div className="flex-1">
         <p
           className="font-black text-base"

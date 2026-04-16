@@ -119,7 +119,7 @@ function SquareVisual({
 
 // ── Single slot cell (1 of 6 shown on the card) ───────────────────────────
 
-interface SlotCellProps {
+export interface SlotCellProps {
   slot: FractionSlot;
   accentColor: string;
   isHighlighted?: boolean;
@@ -128,7 +128,7 @@ interface SlotCellProps {
   compact?: boolean;
 }
 
-function SlotCell({
+export function SlotCell({
   slot,
   accentColor,
   isHighlighted,

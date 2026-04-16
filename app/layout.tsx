@@ -8,7 +8,6 @@ const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito" });
 export const metadata: Metadata = {
   title: 'Frações - Jogo de Cartas',
   description: 'Jogo educativo de cartas com frações equivalentes',
-  generator: 'v0.app',
   icons: {
     icon: [
       {

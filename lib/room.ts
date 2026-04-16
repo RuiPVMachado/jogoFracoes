@@ -11,7 +11,7 @@ export interface Room {
   code: string;
   hostName: string;
   playerNames: string[];
-  maxPlayers: 2 | 4;
+  maxPlayers: 2 | 3 | 4;
   status: RoomStatus;
   createdAt: number;
   gameState: GameState | null;
@@ -32,7 +32,7 @@ export type RoomLookupResult =
 /** Create a new room. Returns the room on success or an error string. */
 export async function createRoom(
   hostName: string,
-  maxPlayers: 2 | 4,
+  maxPlayers: 2 | 3 | 4,
 ): Promise<{ room: Room } | { error: string }> {
   const res = await fetch("/api/room", {
     method: "POST",

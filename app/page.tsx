@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast, Toaster } from "sonner";
 import { SetupScreen } from "@/components/setup-screen";
 import { GameBoard } from "@/components/game-board";
 import { type GameState, initGame } from "@/lib/game";
-import { type AIDifficulty } from "@/lib/ai";
 import { closeRoom, getRoom, syncRoomGameState } from "@/lib/room";
+
 
 interface MultiplayerSession {
   roomCode: string;
@@ -15,7 +16,6 @@ interface MultiplayerSession {
 
 export default function FracoesGame() {
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [aiDifficulty, setAIDifficulty] = useState<AIDifficulty>("medio");
   const [multiplayerSession, setMultiplayerSession] =
     useState<MultiplayerSession | null>(null);
   const multiplayerSessionRef = useRef<MultiplayerSession | null>(null);
@@ -25,11 +25,6 @@ export default function FracoesGame() {
     multiplayerSessionRef.current = multiplayerSession;
   }, [multiplayerSession]);
 
-  function handleStartAI(playerName: string, difficulty: AIDifficulty) {
-    setAIDifficulty(difficulty);
-    setMultiplayerSession(null);
-    setGameState(initGame("ai", [playerName]));
-  }
 
   function handleStartMultiplayer(
     initialState: GameState,
@@ -48,7 +43,7 @@ export default function FracoesGame() {
     setGameState(nextState);
 
     const session = multiplayerSessionRef.current;
-    if (!session || nextState.mode !== "multiplayer") return;
+    if (!session) return;
 
     const result = await syncRoomGameState(
       session.roomCode,
@@ -74,7 +69,7 @@ export default function FracoesGame() {
   }, []);
 
   useEffect(() => {
-    if (!multiplayerSession || !gameState || gameState.mode !== "multiplayer")
+    if (!multiplayerSession || !gameState)
       return;
 
     let active = true;
@@ -93,8 +88,9 @@ export default function FracoesGame() {
           lookup.closedBy.toLowerCase() !==
             session.localPlayerName.toLowerCase()
         ) {
-          alert(`O oponente ${lookup.closedBy} saiu da partida.`);
+          toast(`O oponente ${lookup.closedBy} saiu da partida.`);
         }
+
 
         setMultiplayerSession(null);
         setGameState(null);
@@ -127,37 +123,42 @@ export default function FracoesGame() {
       active = false;
       clearInterval(intervalId);
     };
-  }, [multiplayerSession?.roomCode, gameState?.mode]);
+  }, [multiplayerSession?.roomCode]);
 
   const handleRestart = useCallback(() => {
     const session = multiplayerSessionRef.current;
 
     void (async () => {
-      if (session && gameState?.mode === "multiplayer") {
+      if (session) {
         await closeRoom(session.roomCode, session.localPlayerName);
       }
 
       setMultiplayerSession(null);
       setGameState(null);
     })();
-  }, [gameState?.mode]);
+  }, []);
 
   if (!gameState) {
     return (
-      <SetupScreen
-        onStartAI={handleStartAI}
-        onStartMultiplayer={handleStartMultiplayer}
-      />
+      <>
+        <Toaster richColors position="top-center" />
+        <SetupScreen
+          onStartMultiplayer={handleStartMultiplayer}
+        />
+      </>
     );
   }
 
   return (
-    <GameBoard
-      gameState={gameState}
-      aiDifficulty={aiDifficulty}
-      onGameStateChange={handleGameStateChange}
-      localPlayerName={multiplayerSession?.localPlayerName}
-      onRestart={handleRestart}
-    />
+    <>
+      <Toaster richColors position="top-center" />
+      <GameBoard
+        gameState={gameState}
+        onGameStateChange={handleGameStateChange}
+        localPlayerName={multiplayerSession?.localPlayerName}
+        onRestart={handleRestart}
+      />
+    </>
   );
 }
+
