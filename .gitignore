@@ -7,9 +7,11 @@ __v0_jsx-dev-runtime.ts
 .vercel/
 next.user-config.*
 .github/
+.agents
 
 # Environment variables
 .env*.local
+skills-lock.json
 
 # Common ignores
 node_modules
